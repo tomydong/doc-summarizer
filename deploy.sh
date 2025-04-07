@@ -22,7 +22,9 @@ echo -e "${BLUE}=== BẮT ĐẦU TRIỂN KHAI $APP_NAME ===${NC}"
 # 1. Cài đặt các gói phụ thuộc hệ thống
 echo -e "${YELLOW}[1/6] Cài đặt các gói phụ thuộc hệ thống...${NC}"
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip python3-venv pandoc supervisor
+sudo apt-get install -y python3 python3-pip python3-venv pandoc poppler-utils \
+    libmupdf-dev mupdf-tools pkg-config gcc g++ libfreetype6-dev \
+    supervisor
 
 # 2. Tạo thư mục ứng dụng
 echo -e "${YELLOW}[2/6] Tạo thư mục ứng dụng...${NC}"

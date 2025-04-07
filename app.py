@@ -11,6 +11,7 @@ import markdown
 import re
 import io
 import pypandoc
+import fitz
 from flask_cors import CORS
 import google.generativeai as genai
 
@@ -50,19 +51,26 @@ def extract_text_from_file(file_path, file_ext):
                     return "Lỗi: Không tìm thấy Pandoc. Vui lòng cài đặt Pandoc và thêm vào biến môi trường PATH."
                 return f"Lỗi khi đọc file {file_ext}: {str(e)}"
         elif file_ext == 'pdf':
-            # Sử dụng pypandoc cho PDF nếu có cài đặt pdftotext
             try:
-                return pypandoc.convert_file(file_path, 'plain', format='pdf')
+#                import pdftotext
+#                with open(file_path, "rb") as f:
+#                    pdf = pdftotext.PDF(f)
+#                # Trả về toàn bộ văn bản, các trang được phân tách bằng dấu xuống dòng kép
+#                return "\n\n".join(pdf)
+                doc = fitz.open(file_path)
+                return "\n\n".join(page.get_text() for page in doc)
+            except ImportError:
+                return "Lỗi: Thư viện 'pdftotext' không được cài đặt. Vui lòng cài đặt bằng lệnh: pip install pdftotext"
             except Exception as e:
-                if "pandoc was not found" in str(e):
-                    return "Lỗi: Không tìm thấy Pandoc. Vui lòng cài đặt Pandoc và thêm vào biến môi trường PATH."
-                return "Không thể đọc file PDF. Vui lòng đảm bảo rằng pdftotext đã được cài đặt."
+                print(f"Lỗi khi đọc file PDF bằng pdftotext: {str(e)}")
+                return f"Lỗi khi đọc file PDF bằng pdftotext: {str(e)}"
         elif file_ext == 'md':
             with open(file_path, 'r', encoding='utf-8') as f:
                 return f.read()
         else:
             return "Định dạng file không được hỗ trợ."
     except Exception as e:
+        print(f"Lỗi khi đọc file: {str(e)}")
         return f"Lỗi khi đọc file: {str(e)}"
 
 # Hàm tóm tắt tài liệu bằng Gemini API

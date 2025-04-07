@@ -4,6 +4,13 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y \
     pandoc \
     curl \
+    poppler-utils \
+    libmupdf-dev \
+    mupdf-tools \
+    pkg-config \
+    gcc \
+    g++ \
+    libfreetype6-dev \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
