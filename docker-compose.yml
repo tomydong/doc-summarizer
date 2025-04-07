@@ -1,0 +1,23 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Sử dụng cache_from để tối ưu build nhưng vẫn đảm bảo rebuild khi có thay đổi
+      cache_from:
+        - doc-summarizer:latest
+    image: doc-summarizer:latest
+    container_name: doc-summarizer
+    restart: always
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
