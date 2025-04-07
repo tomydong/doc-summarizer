@@ -1,0 +1,66 @@
+# Môi trường ảo Python
+venv/
+.venv/
+env/
+ENV/
+virtualenv/
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Phân phối / đóng gói
+.eggs/
+*.egg-info/
+*.egg
+
+# File nhật ký và database
+*.log
+*.sqlite
+
+# File biên dịch
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.pyc
+
+# Thư mục và file tạm thời
+.tmp/
+.temp/
+temp/
+tmp/
+.DS_Store
+
+# File môi trường và cấu hình cục bộ
+.env
+.env.local
+*.env.development.local
+*.env.test.local
+*.env.production.local
+
+# IDE và trình soạn thảo
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.sublime-*
+
+# Các thư mục triển khai và build
+build/
+dist/
+site/
+
+# File log ứng dụng
+logs/
+log/
+
+# File đặc biệt cho ứng dụng này
+*.docx
+uploads/
+downloads/

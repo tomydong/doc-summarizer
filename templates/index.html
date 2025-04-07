@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ứng dụng tóm tắt tài liệu</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-file-alt"></i> Ứng dụng tóm tắt tài liệu</h1>
+            <p class="subtitle">Tải lên tài liệu và nhận tóm tắt thông minh</p>
+        </header>
+
+        <div class="main-content">
+            <div class="upload-section">
+                <div class="file-upload-container">
+                    <label for="fileUpload" class="file-upload-label">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span id="fileLabel">Chọn tệp hoặc kéo thả tại đây</span>
+                    </label>
+                    <input type="file" id="fileUpload" class="file-input">
+                </div>
+                <div id="uploadStatus" class="loading-indicator">
+                    <div class="spinner"></div>
+                    <span>Đang tải lên...</span>
+                </div>
+                <div id="fileInfo" class="file-info"></div>
+            </div>
+
+            <div class="prompt-section">
+                <div class="form-group">
+                    <label for="promptSelect">Chọn prompt tóm tắt:</label>
+                    <select id="promptSelect" class="select-input">
+                        <option value="">-- Chọn một prompt --</option>
+                        <option value="Tạo bản tóm tắt ghi lại các điểm chính và chi tiết chính, nội dung tóm tắt cần rõ ràng, bám sát nội dung gốc.">Tóm tắt văn bản</option>
+                        <option value="Liệt kê các điểm chính của tài liệu này dưới dạng dấu gạch đầu dòng.">Liệt kê các điểm chính</option>
+                        <option value="Giải thích mục đích chính và tóm tắt nội dung của tài liệu này.">Giải thích mục đích chính</option>
+                        <option value="custom">Nhập prompt tùy chỉnh</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="customPromptContainer" style="display: none;">
+                    <label for="customPrompt">Prompt tùy chỉnh:</label>
+                    <textarea id="customPrompt" class="textarea-input" placeholder="Nhập yêu cầu tóm tắt tùy chỉnh của bạn..."></textarea>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="summarizeBtn" class="btn primary-btn">
+                        <i class="fas fa-magic"></i> Tóm tắt
+                    </button>
+                </div>
+            </div>
+
+            <div class="result-section">
+                <div id="summaryLoading" class="loading-indicator">
+                    <div class="spinner"></div>
+                    <span>Đang tóm tắt...</span>
+                </div>
+                
+                <div id="summaryResultContainer" style="display: none;">
+                    <div class="result-header">
+                        <h2>Kết quả tóm tắt</h2>
+                        <button id="exportButton" class="btn secondary-btn">
+                            <i class="fas fa-file-word"></i> Xuất DOCX
+                        </button>
+                    </div>
+                    <div id="summaryResult" class="result-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2025 Ứng dụng tóm tắt tài liệu</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Các phần tử DOM
+            const fileInput = document.getElementById('fileUpload');
+            const fileLabel = document.getElementById('fileLabel');
+            const fileInfo = document.getElementById('fileInfo');
+            const promptSelect = document.getElementById('promptSelect');
+            const customPromptContainer = document.getElementById('customPromptContainer');
+            const customPromptTextarea = document.getElementById('customPrompt');
+            const summarizeBtn = document.getElementById('summarizeBtn');
+            const summaryResultContainer = document.getElementById('summaryResultContainer');
+            const summaryResultDiv = document.getElementById('summaryResult');
+            const exportButton = document.getElementById('exportButton');
+            const uploadStatusDiv = document.getElementById('uploadStatus');
+            const summaryLoadingDiv = document.getElementById('summaryLoading');
+
+            // Biến lưu trữ
+            let documentContent = '';
+            let originalMarkdownSummary = '';
+            let fileName = '';
+
+            // Xử lý kéo thả file
+            const dropZone = document.querySelector('.file-upload-label');
+            
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                this.classList.add('drag-over');
+            });
+            
+            dropZone.addEventListener('dragleave', function() {
+                this.classList.remove('drag-over');
+            });
+            
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                this.classList.remove('drag-over');
+                
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    handleFileSelect();
+                }
+            });
+
+            // Sự kiện thay đổi file input
+            fileInput.addEventListener('change', handleFileSelect);
+
+            function handleFileSelect() {
+                if (fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    fileName = file.name;
+                    fileLabel.textContent = 'Tệp đã chọn';
+                    fileInfo.innerHTML = `<div class="file-details">
+                        <i class="fas fa-file-alt"></i>
+                        <span>${fileName}</span>
+                        <span class="file-size">(${formatFileSize(file.size)})</span>
+                    </div>`;
+                    fileInfo.style.display = 'block';
+                    uploadFile(file);
+                }
+            }
+
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            // Sự kiện thay đổi prompt
+            promptSelect.addEventListener('change', function() {
+                if (this.value === 'custom') {
+                    customPromptContainer.style.display = 'block';
+                } else {
+                    customPromptContainer.style.display = 'none';
+                }
+            });
+
+            // Xử lý upload file
+            async function uploadFile(file) {
+                if (!file) return;
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                uploadStatusDiv.style.display = 'flex';
+                fileInfo.style.display = 'none';
+
+                try {
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+                    
+                    uploadStatusDiv.style.display = 'none';
+                    fileInfo.style.display = 'block';
+                    
+                    if (data.error) {
+                        showNotification('error', data.error);
+                        documentContent = '';
+                    } else if (data.content) {
+                        documentContent = data.content;
+                        showNotification('success', 'Tải lên thành công!');
+                    } else {
+                        showNotification('error', 'Upload thành công nhưng không nhận được nội dung.');
+                        documentContent = '';
+                    }
+                } catch (error) {
+                    console.error('Error uploading file:', error);
+                    showNotification('error', 'Không thể tải lên tệp.');
+                    uploadStatusDiv.style.display = 'none';
+                    fileInfo.style.display = 'block';
+                    documentContent = '';
+                }
+            }
+
+            // Xử lý tóm tắt tài liệu
+            summarizeBtn.addEventListener('click', summarizeDocument);
+
+            async function summarizeDocument() {
+                const promptValue = promptSelect.value === 'custom' ? customPromptTextarea.value : promptSelect.value;
+
+                if (!documentContent) {
+                    showNotification('warning', 'Vui lòng tải lên tài liệu trước.');
+                    return;
+                }
+
+                if (!promptValue) {
+                    showNotification('warning', 'Vui lòng chọn hoặc nhập prompt.');
+                    return;
+                }
+
+                summaryLoadingDiv.style.display = 'flex';
+                summaryResultContainer.style.display = 'none';
+
+                try {
+                    const response = await fetch('/summarize', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ documentContent: documentContent, prompt: promptValue })
+                    });
+                    const data = await response.json();
+                    
+                    summaryLoadingDiv.style.display = 'none';
+
+                    if (data.error) {
+                        showNotification('error', data.error);
+                    } else {
+                        originalMarkdownSummary = data.summary;
+                        const htmlResult = marked.parse(originalMarkdownSummary);
+                        summaryResultDiv.innerHTML = htmlResult;
+                        summaryResultContainer.style.display = 'block';
+                        showNotification('success', 'Tóm tắt hoàn thành!');
+                    }
+                } catch (error) {
+                    console.error('Error summarizing document:', error);
+                    showNotification('error', 'Không thể tóm tắt tài liệu.');
+                    summaryLoadingDiv.style.display = 'none';
+                }
+            }
+
+            // Xử lý xuất file DOCX
+            exportButton.addEventListener('click', exportDocx);
+
+            async function exportDocx() {
+                if (!originalMarkdownSummary) {
+                    showNotification('warning', 'Không có kết quả tóm tắt để xuất.');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/export_docx', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ 
+                            summary: originalMarkdownSummary,
+                            filename: fileName.split('.')[0] + '_summary'
+                        })
+                    });
+
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName.split('.')[0] + '_summary.docx';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        showNotification('success', 'Xuất file DOCX thành công!');
+                    } else {
+                        const errorData = await response.json();
+                        showNotification('error', `Lỗi khi xuất file DOCX: ${errorData.error || 'Không xác định'}`);
+                    }
+                } catch (error) {
+                    console.error('Lỗi khi xuất file DOCX:', error);
+                    showNotification('error', 'Đã xảy ra lỗi khi xuất file DOCX.');
+                }
+            }
+
+            // Hiển thị thông báo
+            function showNotification(type, message) {
+                // Tạo phần tử thông báo
+                const notification = document.createElement('div');
+                notification.className = `notification ${type}`;
+                
+                // Thêm icon tương ứng với loại thông báo
+                let icon;
+                switch(type) {
+                    case 'success':
+                        icon = 'fas fa-check-circle';
+                        break;
+                    case 'error':
+                        icon = 'fas fa-exclamation-circle';
+                        break;
+                    case 'warning':
+                        icon = 'fas fa-exclamation-triangle';
+                        break;
+                    default:
+                        icon = 'fas fa-info-circle';
+                }
+                
+                notification.innerHTML = `
+                    <i class="${icon}"></i>
+                    <span>${message}</span>
+                    <button class="close-btn"><i class="fas fa-times"></i></button>
+                `;
+                
+                // Thêm thông báo vào body
+                document.body.appendChild(notification);
+                
+                // Hiển thị thông báo
+                setTimeout(() => {
+                    notification.classList.add('show');
+                }, 10);
+                
+                // Tự động ẩn thông báo sau 5 giây
+                const timeout = setTimeout(() => {
+                    hideNotification(notification);
+                }, 5000);
+                
+                // Xử lý đóng thông báo khi click vào nút đóng
+                const closeBtn = notification.querySelector('.close-btn');
+                closeBtn.addEventListener('click', () => {
+                    clearTimeout(timeout);
+                    hideNotification(notification);
+                });
+            }
+            
+            function hideNotification(notification) {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }
+        });
+    </script>
+</body>
+</html>
