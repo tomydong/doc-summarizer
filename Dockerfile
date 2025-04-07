@@ -21,6 +21,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Cài đặt các gói phụ thuộc Python
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Sao chép script khởi động
