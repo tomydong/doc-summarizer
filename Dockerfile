@@ -16,15 +16,12 @@ COPY requirements.txt .
 # Cài đặt các gói phụ thuộc Python
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Sao chép script khởi động
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Sao chép tất cả các file khác
 COPY . .
-
-# Tạo script khởi động cho Gunicorn với số workers tự động
-RUN echo '#!/bin/bash \n\
-WORKERS=$(( 2 * $(nproc) + 1 )) \n\
-echo "Starting with $WORKERS workers" \n\
-exec gunicorn --workers=$WORKERS --threads=2 --worker-class=gthread --bind 0.0.0.0:5000 --timeout=120 --keep-alive=5 --max-requests=1000 --max-requests-jitter=50 app:app \
-' > /app/start.sh && chmod +x /app/start.sh
 
 # Thiết lập biến môi trường
 ENV PYTHONUNBUFFERED=1
