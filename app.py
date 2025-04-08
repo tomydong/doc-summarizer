@@ -4,9 +4,6 @@ import datetime
 from flask import Flask, request, jsonify, render_template, send_file
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
-import docx
-from docx.shared import Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 import markdown
 import re
 import io
@@ -14,6 +11,7 @@ import pypandoc
 import fitz
 from flask_cors import CORS
 import google.generativeai as genai
+import shutil
 
 try:
     pypandoc.get_pandoc_path()
@@ -123,133 +121,42 @@ def summarize_with_api(content, prompt):
     except Exception as e:
         return f"Lỗi khi tóm tắt: {str(e)}"
 
-# Hàm để xử lý việc chuyển đổi markdown sang DOCX
-def markdown_to_docx(markdown_text, original_filename=None, default_font_name='Arial'):
-    # Khởi tạo document mới
-    doc = docx.Document()
-    
-    # Thiết lập style cho toàn bộ tài liệu
-    style = doc.styles['Normal']
-    font = style.font
-    font.name = default_font_name
-    font.size = Pt(11)
-    
-    # Thêm tiêu đề lớn cho tài liệu
+def markdown_to_docx_pandoc(markdown_text, original_filename=None, reference_docx_path=None):
+    # Tiêu đề chính
     if original_filename:
-        title_text = f'TÓM TẮT TÀI LIỆU: {original_filename}'
+        title = f'# TÓM TẮT TÀI LIỆU: {original_filename}\n\n'
     else:
-        title_text = 'TÓM TẮT TÀI LIỆU'
-        
-    title = doc.add_heading(title_text, level=0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    
-    # Phân tích cú pháp markdown
-    lines = markdown_text.split('\n')
-    
-    current_list = []
-    in_list = False
-    in_code_block = False
-    
-    for line in lines:
-        # Xử lý tiêu đề
-        header_match = re.match(r'^(#{1,6})\s+(.+)$', line)
-        if header_match:
-            level = len(header_match.group(1))
-            content = header_match.group(2).strip()
-            doc.add_heading(content, level=level)
-            continue
-            
-        # Xử lý đoạn văn bản thông thường
-        if not line.strip():
-            if in_list:
-                # Xử lý danh sách đã tích lũy
-                for item in current_list:
-                    list_item = doc.add_paragraph(style='List Bullet')
-                    list_item.add_run(item)
-                current_list = []
-                in_list = False
-            doc.add_paragraph()
-            continue
-            
-        # Xử lý danh sách không có thứ tự
-        list_match = re.match(r'^(\s*[-*])\s+(.+)$', line)
-        if list_match:
-            in_list = True
-            content = list_match.group(2).strip()
-            current_list.append(content)
-            continue
-            
-        # Xử lý danh sách có thứ tự
-        ordered_list_match = re.match(r'^(\s*\d+\.)\s+(.+)$', line)
-        if ordered_list_match:
-            in_list = True
-            content = ordered_list_match.group(2).strip()
-            current_list.append(content)
-            continue
-            
-        # Xử lý đoạn code
-        if line.strip() == '```':
-            in_code_block = not in_code_block
-            if not in_code_block:  # Kết thúc code block
-                doc.add_paragraph() # Thêm đoạn trống sau code block
-            continue
-        
-        if in_code_block:
-            code_para = doc.add_paragraph()
-            code_run = code_para.add_run(line)
-            code_run.font.name = 'Courier New'
-            code_run.font.size = Pt(9)
-            continue
-            
-        # Xử lý văn bản thông thường
-        if not in_list:
-            # Xử lý đậm, nghiêng, v.v.
-            para = doc.add_paragraph()
-            
-            # Xử lý định dạng đậm và nghiêng
-            bold_italic_pattern = r'(\*\*\*|\*\*|__|\*|_)(.*?)\1'
-            last_end = 0
-            
-            for match in re.finditer(bold_italic_pattern, line):
-                # Thêm văn bản thường trước phần được định dạng
-                if match.start() > last_end:
-                    para.add_run(line[last_end:match.start()])
-                
-                marker = match.group(1)
-                content = match.group(2)
-                
-                run = para.add_run(content)
-                if marker in ('***', '___'):
-                    run.bold = True
-                    run.italic = True
-                elif marker in ('**', '__'):
-                    run.bold = True
-                elif marker in ('*', '_'):
-                    run.italic = True
-                    
-                last_end = match.end()
-            
-            # Thêm phần còn lại của dòng
-            if last_end < len(line):
-                para.add_run(line[last_end:])
-    
-    # Xử lý danh sách còn lại nếu có
-    if in_list:
-        for item in current_list:
-            list_item = doc.add_paragraph(style='List Bullet')
-            list_item.add_run(item)
-    
-    # Thêm thông tin về ngày tạo tài liệu
-    doc.add_paragraph()
-    footer = doc.add_paragraph()
-    footer.add_run(f"Tạo lúc: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-    footer.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    
-    # Lưu tài liệu vào memory stream
-    docx_io = io.BytesIO()
-    doc.save(docx_io)
-    docx_io.seek(0)
-    
+        title = '# TÓM TẮT TÀI LIỆU\n\n'
+
+    # Thêm thời gian tạo tài liệu
+    timestamp = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+    footer = f'\n\n---\n_Tạo lúc: {timestamp}_\n'
+
+    # Ghép nội dung đầy đủ
+    full_markdown = title + markdown_text.strip() + footer
+
+    # Tạo file tạm để lưu DOCX output
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
+        output_path = tmp_docx.name
+
+    # Chuyển đổi markdown -> docx với tùy chọn template doc
+    extra_args = []
+    if reference_docx_path:
+        extra_args += [f'--reference-doc={reference_docx_path}']
+    print(extra_args)
+
+    # Chuyển đổi markdown -> docx
+    try:
+        pypandoc.convert_text(full_markdown, to='docx', format='md', outputfile=output_path, extra_args=extra_args)
+        with open(output_path, 'rb') as f:
+            docx_io = io.BytesIO(f.read())
+        docx_io.seek(0)
+    except Exception as e:
+        print(f"[ERROR] Pandoc conversion failed: {str(e)}")
+
+    finally:
+        os.remove(output_path)  # Dọn dẹp file tạm
+
     return docx_io
 
 # Route cho trang chủ
@@ -274,6 +181,18 @@ def upload_file():
         file.save(file_path)
         
         file_ext = filename.rsplit('.', 1)[1].lower()
+
+        # Nếu là file doc hoặc docx, copy vào thư mục static
+        if file_ext in ['doc', 'docx']:
+            static_dir = 'static'
+            os.makedirs(static_dir, exist_ok=True)
+            reference_org_path = os.path.join(static_dir, f"reference_org.{file_ext}")
+            try:
+                shutil.copy(file_path, reference_org_path)
+                print(f"Đã sao chép file gốc vào: {reference_org_path}")
+            except Exception as e:
+                print(f"Lỗi khi sao chép file gốc: {e}")
+
         content = extract_text_from_file(file_path, file_ext)
         
         # Xóa file sau khi đã đọc xong
@@ -330,14 +249,19 @@ def export_docx():
     
     markdown_text = data['summary']
     original_filename = data.get('filename', '')
-    original_font_name = data.get('original_font_name') # Nhận tên font chữ từ client
+    reference_docx_path = "static/reference.docx"
     
+    print("original_filename:", original_filename)
+    file_ext = original_filename.rsplit('.', 1)[1].lower()
+    if file_ext in ['doc', 'docx']:
+        reference_docx_path = "static/reference_org.docx"
+
     if not markdown_text:
         return jsonify({'error': 'Nội dung tóm tắt trống'})
     
     try:
         # Chuyển đổi markdown sang DOCX với tên file gốc
-        docx_io = markdown_to_docx(markdown_text, original_filename, original_font_name)
+        docx_io = markdown_to_docx_pandoc(markdown_text, original_filename, reference_docx_path)
         
         # Tạo tên file xuất
         if original_filename:
