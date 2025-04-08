@@ -15,6 +15,7 @@ services:
       - .env
     volumes:
       - ./:/app
+      - /data/doc_summarizer/uploads:/app/uploads
     networks:
       - app-network
 

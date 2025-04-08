@@ -98,6 +98,7 @@
             let documentContent = '';
             let originalMarkdownSummary = '';
             let fileName = '';
+            let filePath = '';
 
             // Xử lý kéo thả file
             const dropZone = document.querySelector('.file-upload-label');
@@ -181,6 +182,7 @@
                         documentContent = '';
                     } else if (data.content) {
                         documentContent = data.content;
+                        filePath = data.file_path;
                         showNotification('success', 'Tải lên thành công!');
                     } else {
                         showNotification('error', 'Upload thành công nhưng không nhận được nội dung.');
@@ -259,7 +261,9 @@
                         },
                         body: JSON.stringify({ 
                             summary: originalMarkdownSummary,
-                            filename: fileName.split('.')[0] + '_summary'
+                            // filename: fileName.split('.')[0] + '_summary',
+                            filename: fileName,
+                            file_path: filePath
                         })
                     });
 

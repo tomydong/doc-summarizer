@@ -36,6 +36,8 @@ ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 
+RUN mkdir -p /app/uploads
+
 # Port mà ứng dụng sẽ chạy 
 EXPOSE 5000
 
