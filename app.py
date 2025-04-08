@@ -12,6 +12,7 @@ import fitz
 from flask_cors import CORS
 import google.generativeai as genai
 import shutil
+from tika import parser
 
 try:
     pypandoc.get_pandoc_path()
@@ -40,13 +41,19 @@ def extract_text_from_file(file_path, file_ext):
         if file_ext == 'txt':
             with open(file_path, 'r', encoding='utf-8') as f:
                 return f.read()
-        elif file_ext in ['docx', 'doc', 'rtf', 'odt']:
+        elif file_ext in ['docx', 'rtf', 'odt']:
             try:
                 # Sử dụng pypandoc để chuyển đổi các định dạng văn bản phổ biến sang text
                 return pypandoc.convert_file(file_path, 'plain', format=file_ext)
             except Exception as e:
-                if "pandoc was not found" in str(e):
-                    return "Lỗi: Không tìm thấy Pandoc. Vui lòng cài đặt Pandoc và thêm vào biến môi trường PATH."
+                return f"Lỗi khi đọc file {file_ext}: {str(e)}"
+        elif file_ext == 'doc':
+            try:
+                # Thử với tika
+                parsed = parser.from_file(file_path)
+                if parsed["content"]:
+                    return parsed["content"]
+            except Exception as e:
                 return f"Lỗi khi đọc file {file_ext}: {str(e)}"
         elif file_ext == 'pdf':
             try:
@@ -130,7 +137,7 @@ def markdown_to_docx_pandoc(markdown_text, original_filename=None, reference_doc
 
     # Thêm thời gian tạo tài liệu
     timestamp = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-    footer = f'\n\n---\n_Tạo lúc: {timestamp}_\n'
+    footer = "" #f'\n\n---\n_Tạo lúc: {timestamp}_\n'
 
     # Ghép nội dung đầy đủ
     full_markdown = title + markdown_text.strip() + footer
@@ -183,15 +190,15 @@ def upload_file():
         file_ext = filename.rsplit('.', 1)[1].lower()
 
         # Nếu là file doc hoặc docx, copy vào thư mục static
-        if file_ext in ['doc', 'docx']:
-            static_dir = 'static'
-            os.makedirs(static_dir, exist_ok=True)
-            reference_org_path = os.path.join(static_dir, f"reference_org.{file_ext}")
-            try:
-                shutil.copy(file_path, reference_org_path)
-                print(f"Đã sao chép file gốc vào: {reference_org_path}")
-            except Exception as e:
-                print(f"Lỗi khi sao chép file gốc: {e}")
+#        if file_ext in ['doc', 'docx']:
+#            static_dir = 'static'
+#            os.makedirs(static_dir, exist_ok=True)
+#            reference_org_path = os.path.join(static_dir, f"reference_org.{file_ext}")
+#            try:
+#                shutil.copy(file_path, reference_org_path)
+#                print(f"Đã sao chép file gốc vào: {reference_org_path}")
+#            except Exception as e:
+#                print(f"Lỗi khi sao chép file gốc: {e}")
 
         content = extract_text_from_file(file_path, file_ext)
         
@@ -251,10 +258,10 @@ def export_docx():
     original_filename = data.get('filename', '')
     reference_docx_path = "static/reference.docx"
     
-    print("original_filename:", original_filename)
-    file_ext = original_filename.rsplit('.', 1)[1].lower()
-    if file_ext in ['doc', 'docx']:
-        reference_docx_path = "static/reference_org.docx"
+#    print("original_filename:", original_filename)
+#    file_ext = original_filename.rsplit('.', 1)[1].lower()
+#    if file_ext in ['doc', 'docx']:
+#        reference_docx_path = "static/reference_org.docx"
 
     if not markdown_text:
         return jsonify({'error': 'Nội dung tóm tắt trống'})
